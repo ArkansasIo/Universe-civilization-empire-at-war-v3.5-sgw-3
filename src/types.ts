@@ -511,6 +511,7 @@ export interface CronExecutionLog {
     crystalMined?: number;
     deuteriumMined?: number;
     energyBalance?: number;
+    creditsAdded?: number;
   };
 }
 

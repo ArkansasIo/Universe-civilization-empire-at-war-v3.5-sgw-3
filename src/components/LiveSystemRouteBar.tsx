@@ -1,5 +1,5 @@
 import React from 'react';
-import { Globe, Pickaxe, Coins, Atom, Wrench, Rocket, Swords, Crown, ChevronRight, Activity } from 'lucide-react';
+import { Globe, Pickaxe, Coins, Atom, Wrench, Rocket, Swords, Crown, ChevronRight, Activity, GraduationCap } from 'lucide-react';
 import { sound } from '../sound';
 
 interface LiveSystemRouteBarProps {
@@ -14,9 +14,10 @@ export const LiveSystemRouteBar: React.FC<LiveSystemRouteBarProps> = ({ activeRo
     { id: 'resources', label: '3. Resources', icon: Coins, route: 'resources' },
     { id: 'research', label: '4. Research', icon: Atom, route: 'tech-tree' },
     { id: 'shipyard', label: '5. Shipyard', icon: Wrench, route: 'shipyard' },
-    { id: 'fleet', label: '6. Fleet', icon: Rocket, route: 'targets' },
-    { id: 'combat', label: '7. Combat', icon: Swords, route: 'combat' },
-    { id: 'universe', label: '8. Expansion', icon: Crown, route: 'universe' },
+    { id: 'workforce', label: '6. Academy', icon: GraduationCap, route: 'workforce-academy' },
+    { id: 'fleet', label: '7. Fleet', icon: Rocket, route: 'targets' },
+    { id: 'combat', label: '8. Combat', icon: Swords, route: 'combat' },
+    { id: 'universe', label: '9. Expansion', icon: Crown, route: 'universe' },
   ];
 
   return (
@@ -38,6 +39,7 @@ export const LiveSystemRouteBar: React.FC<LiveSystemRouteBarProps> = ({ activeRo
             (step.id === 'resources' && activeRoute === 'resources') ||
             (step.id === 'research' && (activeRoute === 'tech-tree' || activeRoute === 'research')) ||
             (step.id === 'shipyard' && activeRoute === 'shipyard') ||
+            (step.id === 'workforce' && (activeRoute === 'workforce-academy' || activeRoute === 'academy-enlistment' || activeRoute === 'workforce-roster' || activeRoute === 'academy-wings' || activeRoute === 'academy-drills')) ||
             (step.id === 'fleet' && (activeRoute === 'targets' || activeRoute === 'fleet')) ||
             (step.id === 'combat' && (activeRoute === 'combat' || activeRoute === 'attack-log')) ||
             (step.id === 'universe' && (activeRoute === 'universe' || activeRoute === 'galaxy'));

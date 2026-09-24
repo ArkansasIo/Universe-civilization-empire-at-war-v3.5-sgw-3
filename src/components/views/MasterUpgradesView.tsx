@@ -35,6 +35,7 @@ interface MasterUpgradesViewProps {
   upgradesState?: MasterUpgradesState;
   onUpgradeKey: (key: string, cost: { metal: number; crystal: number; deuterium: number; naquadah: number }) => void;
   onNavigate?: (route: string) => void;
+  initialCategory?: ImperialUpgradeCategory | 'all';
 }
 
 export const MasterUpgradesView: React.FC<MasterUpgradesViewProps> = ({
@@ -42,9 +43,16 @@ export const MasterUpgradesView: React.FC<MasterUpgradesViewProps> = ({
   upgradesState = DEFAULT_MASTER_UPGRADES_STATE,
   onUpgradeKey,
   onNavigate,
+  initialCategory = 'all',
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState<ImperialUpgradeCategory | 'all'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<ImperialUpgradeCategory | 'all'>(initialCategory);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  React.useEffect(() => {
+    if (initialCategory) {
+      setSelectedCategory(initialCategory);
+    }
+  }, [initialCategory]);
 
   const localState = upgradesState || DEFAULT_MASTER_UPGRADES_STATE;
 

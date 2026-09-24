@@ -19,6 +19,12 @@ export const TechnologyView: React.FC<TechnologyViewProps> = ({
   const [filter, setFilter] = useState<string>(activeBranchFilter || 'all');
   const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  React.useEffect(() => {
+    if (activeBranchFilter) {
+      setFilter(activeBranchFilter);
+    }
+  }, [activeBranchFilter]);
+
   const filteredTechs = technologies.filter((t) => {
     if (filter === 'all') return true;
     return t.category === filter;

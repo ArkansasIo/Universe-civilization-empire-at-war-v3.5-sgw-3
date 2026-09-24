@@ -38,10 +38,13 @@ import {
   CreditCard,
   Award,
   Menu,
+  Crosshair,
 } from 'lucide-react';
 import { sound } from '../sound';
 import { PlayerProfile, PlayerResources, PlanetColony } from '../types';
 import { getAdminAuthSession } from '../config/adminAuthConfig';
+import { GalacticCreditsModal } from './modals/GalacticCreditsModal';
+import { ConscriptRecruitsModal } from './modals/ConscriptRecruitsModal';
 
 interface TopbarProps {
   activeRoute: string;
@@ -61,6 +64,9 @@ interface TopbarProps {
   onOpenUpdateInfo?: () => void;
   onOpenCredits?: () => void;
   onToggleMobileMenu?: () => void;
+  onUpdateResources?: (res: Partial<PlayerResources>) => void;
+  onUpdatePlanets?: (planets: PlanetColony[]) => void;
+  onColonizePlanet?: (coordinate: string, biome: string, name: string) => { success: boolean; message: string };
 }
 
 const ROUTE_LABELS: Record<string, { section: string; title: string }> = {
@@ -88,6 +94,11 @@ const ROUTE_LABELS: Record<string, { section: string; title: string }> = {
   'super-units': { section: 'PERSONNEL & TRAINING', title: 'Elite Super Units' },
   'unit-production': { section: 'PERSONNEL & TRAINING', title: 'Population Generation' },
   'unit-roster-90': { section: 'PERSONNEL & TRAINING', title: '90-Class Unit Roster' },
+  'workforce-academy': { section: 'WORKFORCE & ACADEMY', title: 'Workforce Recruitment & Specialized Academy' },
+  'academy-enlistment': { section: 'WORKFORCE & ACADEMY', title: 'Imperial Enlistment & Academy Specialization' },
+  'workforce-roster': { section: 'WORKFORCE & ACADEMY', title: '90-Role Imperial Workforce Roster' },
+  'academy-wings': { section: 'WORKFORCE & ACADEMY', title: '6 Specialized Academy Wings' },
+  'academy-drills': { section: 'WORKFORCE & ACADEMY', title: 'Academy Drills, Readiness & Auto-Draft' },
   'tech-tree': { section: 'TECHNOLOGY ARCHIVE', title: 'Master Technology Tree & Visual Unlock Graph' },
   'tech-library': { section: 'TECHNOLOGY ARCHIVE', title: 'Research Library & Laboratory Focus' },
   'eve-blueprints': { section: 'TECHNOLOGY ARCHIVE', title: 'EVE Blueprints & ME/TE' },
@@ -165,6 +176,9 @@ export const Topbar: React.FC<TopbarProps> = ({
   onOpenUpdateInfo,
   onOpenCredits,
   onToggleMobileMenu,
+  onUpdateResources,
+  onUpdatePlanets,
+  onColonizePlanet,
 }) => {
   const currentMeta = ROUTE_LABELS[activeRoute] || {
     section: 'UNIVERSE CIVILIZATION',
@@ -177,6 +191,9 @@ export const Topbar: React.FC<TopbarProps> = ({
   const [turnExecuting, setTurnExecuting] = useState<boolean>(false);
   const [isPlanetMenuOpen, setIsPlanetMenuOpen] = useState<boolean>(false);
   const [showTurnGainDetails, setShowTurnGainDetails] = useState<boolean>(false);
+  const [isCreditsSystemModalOpen, setIsCreditsSystemModalOpen] = useState<boolean>(false);
+  const [isConscriptRecruitsModalOpen, setIsConscriptRecruitsModalOpen] = useState<boolean>(false);
+  const [conscriptModalTab, setConscriptModalTab] = useState<'conscripts' | 'food-water' | 'fields' | 'colonize'>('conscripts');
   const planetDropdownRef = useRef<HTMLDivElement>(null);
   const turnGainRef = useRef<HTMLDivElement>(null);
 
@@ -577,47 +594,90 @@ export const Topbar: React.FC<TopbarProps> = ({
         <div className="flex xl:grid xl:grid-cols-9 gap-2 flex-1 overflow-x-auto no-scrollbar py-0.5 scroll-smooth">
           {/* 0. GALACTIC CREDITS (GC) */}
           <div
-            className="min-w-[130px] sm:min-w-[140px] xl:min-w-0 shrink-0 xl:shrink relative p-2 border border-[#dedede] bg-[#fafafa] hover:border-amber-500 transition-all cursor-pointer group"
+            id="galactic-credits-topbar-card"
+            className="min-w-[145px] sm:min-w-[160px] xl:min-w-0 shrink-0 xl:shrink relative p-2 border-2 border-amber-500 bg-gradient-to-b from-amber-100/60 via-white to-amber-50/70 hover:border-amber-600 hover:shadow-md hover:shadow-amber-500/25 transition-all cursor-pointer group shadow-xs"
             onMouseEnter={() => setActiveTooltip('credits')}
             onMouseLeave={() => setActiveTooltip(null)}
-            onClick={() => onNavigate && onNavigate('resource-exchange')}
+            onClick={() => {
+              sound.play('click');
+              setIsCreditsSystemModalOpen(true);
+            }}
+            title="Galactic Credits System · Click to open Interstellar Central Bank & FX Matrix"
           >
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[9px] font-black uppercase text-[#666666] tracking-wider flex items-center gap-1">
-                <CreditCard size={11} className="text-amber-500" />
+              <span className="text-[9px] font-black uppercase text-amber-950 tracking-wider flex items-center gap-1.5">
+                <div className="w-4 h-4 rounded-xs bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-800 group-hover:bg-amber-500 group-hover:text-black transition-colors">
+                  <CreditCard size={10} strokeWidth={2.5} />
+                </div>
                 <span>Galactic Credits</span>
               </span>
-              <span className="text-[9px] font-mono text-emerald-700 font-bold">+250/t</span>
+              <span className="text-[9px] font-mono text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-1 py-0.2 rounded-2xs font-black flex items-center gap-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                +570/t
+              </span>
             </div>
             <div className="flex items-baseline justify-between font-mono">
-              <strong className="text-sm sm:text-base font-bold tracking-tight text-amber-900">
+              <strong className="text-sm sm:text-base font-black tracking-tight text-amber-950">
                 {(resources.credits ?? 500000).toLocaleString()}{' '}
-                <span className="text-[10px] text-amber-600">GC</span>
+                <span className="text-[10px] font-black text-amber-900 bg-amber-200/90 px-1 py-0.2 border border-amber-400">GC</span>
               </strong>
-              <span className="text-[10px] text-[#888888]">Universal</span>
+              <span className="text-[9px] font-mono font-bold text-amber-700/90">AAA Prime</span>
             </div>
-            {/* Credits Bar */}
-            <div className="w-full h-1 bg-[#e5e5e5] mt-1.5 overflow-hidden">
-              <div className="h-full bg-amber-500 transition-all duration-300 w-full" />
+            {/* Glowing Liquidity & Solvency Bar */}
+            <div className="w-full h-1.5 bg-amber-200/70 mt-1.5 overflow-hidden rounded-full p-0.2 border border-amber-300">
+              <div className="h-full bg-gradient-to-r from-amber-500 via-amber-400 to-amber-600 rounded-full transition-all duration-300 w-full animate-pulse" />
+            </div>
+
+            {/* Quick Action Sub-Strip */}
+            <div className="mt-1 flex items-center justify-between text-[8px] font-mono text-amber-800">
+              <span className="flex items-center gap-0.5 font-bold text-amber-900">
+                <Sparkles size={8} className="text-amber-600" />
+                <span>GCS-9000</span>
+              </span>
+              <span className="bg-amber-600 group-hover:bg-amber-700 text-white px-1 py-0.2 uppercase font-black tracking-wider transition-colors">
+                FX Console ▾
+              </span>
             </div>
 
             {/* Hover Tooltip */}
             {activeTooltip === 'credits' && (
-              <div className="absolute left-0 top-full mt-2 w-64 p-3 bg-[#111111] text-white text-xs z-50 shadow-xl border border-white/20 space-y-1.5 pointer-events-none">
-                <div className="font-bold flex justify-between border-b border-white/20 pb-1">
-                  <span>GALACTIC CREDITS (GC)</span>
-                  <span className="font-mono text-amber-400">FIAT CURRENCY</span>
+              <div className="absolute left-0 top-full mt-2 w-72 p-3 bg-[#111111] text-white text-xs z-50 shadow-2xl border-2 border-amber-500/80 space-y-2 pointer-events-none">
+                <div className="font-bold flex justify-between border-b border-white/20 pb-1.5">
+                  <span className="flex items-center gap-1.5 text-amber-400">
+                    <CreditCard size={13} />
+                    <span>GALACTIC CREDITS SYSTEM (GCS-9000)</span>
+                  </span>
+                  <span className="font-mono text-emerald-400 text-[10px] bg-emerald-950 px-1 border border-emerald-500">AAA+ GRADE</span>
                 </div>
-                <div className="flex justify-between text-[11px] text-neutral-300">
-                  <span>Available Balance:</span>
-                  <span className="font-mono text-white">{(resources.credits ?? 500000).toLocaleString()} GC</span>
+                <div className="space-y-1 text-[11px] text-neutral-300">
+                  <div className="flex justify-between">
+                    <span>Liquid Treasury Balance:</span>
+                    <span className="font-mono text-amber-300 font-bold">{(resources.credits ?? 500000).toLocaleString()} GC</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Total Net Turn Yield:</span>
+                    <span className="font-mono text-emerald-400 font-bold">+570 GC/t (+34,200/h)</span>
+                  </div>
+                  <div className="flex justify-between text-neutral-400 text-[10px]">
+                    <span>· AIC Nanite Industry:</span>
+                    <span className="font-mono text-neutral-200">+250 GC/turn</span>
+                  </div>
+                  <div className="flex justify-between text-neutral-400 text-[10px]">
+                    <span>· Planetary Commerce:</span>
+                    <span className="font-mono text-neutral-200">+180 GC/turn</span>
+                  </div>
+                  <div className="flex justify-between text-neutral-400 text-[10px]">
+                    <span>· Guild Trade & Tolls:</span>
+                    <span className="font-mono text-neutral-200">+140 GC/turn</span>
+                  </div>
+                  <div className="flex justify-between text-neutral-400 text-[10px]">
+                    <span>Reserve Solvency Backing:</span>
+                    <span className="font-mono text-cyan-300">100% Naquadah Standard</span>
+                  </div>
                 </div>
-                <div className="flex justify-between text-[11px] text-neutral-300">
-                  <span>AIC Factory Revenue:</span>
-                  <span className="font-mono text-emerald-400">+250 GC/turn (+15k/h)</span>
-                </div>
-                <div className="text-[10px] text-neutral-400 pt-1 border-t border-white/10">
-                  Universal interstellar tender accepted across all 30 universes. Used for AIC factory upgrades, arms trading, mercenary contracts, and craft floor rushing.
+                <div className="text-[10px] text-amber-200/90 pt-1.5 border-t border-white/10 flex items-center justify-between">
+                  <span>⚡ Instant FX Swaps & Central Bank Grants</span>
+                  <span className="font-bold uppercase text-[9px] bg-amber-500 text-black px-1">Click to open</span>
                 </div>
               </div>
             )}
@@ -804,17 +864,21 @@ export const Topbar: React.FC<TopbarProps> = ({
 
           {/* 4. FOOD (LIFE SUPPORT & NUTRITION) */}
           <div
-            className="min-w-[135px] sm:min-w-[145px] xl:min-w-0 shrink-0 xl:shrink relative p-2 border border-emerald-300/80 bg-gradient-to-b from-emerald-50/70 via-white to-emerald-50/25 hover:border-emerald-600 hover:shadow-xs transition-all cursor-pointer group"
+            className="min-w-[140px] sm:min-w-[155px] xl:min-w-0 shrink-0 xl:shrink relative p-2 border border-emerald-400/90 bg-gradient-to-b from-emerald-50/80 via-white to-emerald-100/30 hover:border-emerald-600 hover:shadow-xs transition-all cursor-pointer group ring-1 ring-emerald-400/20"
             onMouseEnter={() => setActiveTooltip('food')}
             onMouseLeave={() => setActiveTooltip(null)}
-            onClick={() => onNavigate && onNavigate('planet-list')}
+            onClick={() => {
+              sound.play('click');
+              setConscriptModalTab('food-water');
+              setIsConscriptRecruitsModalOpen(true);
+            }}
           >
             <div className="flex items-center justify-between mb-1">
               <span className="text-[9px] font-black uppercase text-emerald-950 tracking-wider flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded-xs bg-emerald-600/10 border border-emerald-500/30 flex items-center justify-center text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
                   <Wheat size={10} strokeWidth={2.5} />
                 </div>
-                <span>Food</span>
+                <span>Food & Rations</span>
               </span>
               <span className="text-[9px] font-mono text-emerald-700 bg-emerald-100/90 border border-emerald-300/80 px-1 py-0.2 rounded-2xs font-bold flex items-center gap-0.5 shadow-2xs">
                 <TrendingUp size={8} strokeWidth={3} />
@@ -830,7 +894,7 @@ export const Topbar: React.FC<TopbarProps> = ({
                 {(resources.food ?? 42000).toLocaleString()}
                 <span className="text-[9px] text-emerald-800/80 font-bold ml-0.5">kg</span>
               </strong>
-              <span className="text-[9.5px] font-mono text-emerald-800/70 bg-white/90 px-1 py-0.2 border border-emerald-200/80 rounded-2xs shadow-2xs">
+              <span className="text-[9.5px] font-mono text-emerald-800/80 bg-white/90 px-1 py-0.2 border border-emerald-200/80 rounded-2xs shadow-2xs">
                 {Math.round(foodCapacity / 1000)}k cap
               </span>
             </div>
@@ -845,9 +909,9 @@ export const Topbar: React.FC<TopbarProps> = ({
                 style={{ width: `${foodPercent}%` }}
               />
             </div>
-            <div className="flex items-center justify-between text-[8px] font-mono text-emerald-800/80 mt-0.5 font-medium">
-              <span>Hydroponics</span>
-              <span className="font-bold text-emerald-900">{foodPercent}%</span>
+            <div className="flex items-center justify-between text-[8px] font-mono text-emerald-800/90 mt-0.5 font-medium">
+              <span>Sustains 14M Pops</span>
+              <span className="font-bold text-emerald-900">{foodPercent}% Full</span>
             </div>
 
             {/* Hover Tooltip */}
@@ -856,7 +920,7 @@ export const Topbar: React.FC<TopbarProps> = ({
                 <div className="font-bold flex justify-between border-b border-white/20 pb-1">
                   <span className="flex items-center gap-1 text-emerald-300">
                     <Wheat size={12} />
-                    FOOD & BIOSPHERE
+                    FOOD & NUTRITION SYSTEM
                   </span>
                   <span className="font-mono text-emerald-400">{foodPercent}% FULL</span>
                 </div>
@@ -869,15 +933,19 @@ export const Topbar: React.FC<TopbarProps> = ({
                   <span className="font-mono text-white">{foodCapacity.toLocaleString()} kg</span>
                 </div>
                 <div className="flex justify-between text-[11px] text-neutral-300">
+                  <span>Homeworld Demands:</span>
+                  <span className="font-mono text-emerald-300">8.2k kg/h (14M Citizens)</span>
+                </div>
+                <div className="flex justify-between text-[11px] text-neutral-300">
+                  <span>Recruit Mobilization:</span>
+                  <span className="font-mono text-white">4.5 kg/conscript unit</span>
+                </div>
+                <div className="flex justify-between text-[11px] text-neutral-300">
                   <span>Net Growth Yield:</span>
                   <span className="font-mono text-emerald-400 font-bold">+60/t (+3.6k/h)</span>
                 </div>
-                <div className="flex justify-between text-[11px] text-neutral-300">
-                  <span>Rationing Status:</span>
-                  <span className="font-mono text-emerald-300">Abundant Sustenance</span>
-                </div>
                 <div className="text-[10px] text-emerald-200/70 pt-1 border-t border-white/10 font-mono">
-                  Essential nourishment for citizen pops. Famine triggers civil unrest and colonial plunge.
+                  Sustains 14M Homeworld citizens and conscript recruits. Click to open Life Support Console.
                 </div>
               </div>
             )}
@@ -885,17 +953,21 @@ export const Topbar: React.FC<TopbarProps> = ({
 
           {/* 5. WATER (AQUIFER & HYDRATION) */}
           <div
-            className="min-w-[135px] sm:min-w-[145px] xl:min-w-0 shrink-0 xl:shrink relative p-2 border border-cyan-300/80 bg-gradient-to-b from-cyan-50/70 via-white to-cyan-50/25 hover:border-cyan-600 hover:shadow-xs transition-all cursor-pointer group"
+            className="min-w-[140px] sm:min-w-[155px] xl:min-w-0 shrink-0 xl:shrink relative p-2 border border-cyan-400/90 bg-gradient-to-b from-cyan-50/80 via-white to-cyan-100/30 hover:border-cyan-600 hover:shadow-xs transition-all cursor-pointer group ring-1 ring-cyan-400/20"
             onMouseEnter={() => setActiveTooltip('water')}
             onMouseLeave={() => setActiveTooltip(null)}
-            onClick={() => onNavigate && onNavigate('planet-list')}
+            onClick={() => {
+              sound.play('click');
+              setConscriptModalTab('food-water');
+              setIsConscriptRecruitsModalOpen(true);
+            }}
           >
             <div className="flex items-center justify-between mb-1">
               <span className="text-[9px] font-black uppercase text-cyan-950 tracking-wider flex items-center gap-1.5">
                 <div className="w-4 h-4 rounded-xs bg-cyan-600/10 border border-cyan-500/30 flex items-center justify-center text-cyan-700 group-hover:bg-cyan-600 group-hover:text-white transition-colors">
                   <Droplet size={10} strokeWidth={2.5} />
                 </div>
-                <span>Water</span>
+                <span>Water & Aquifer</span>
               </span>
               <span className="text-[9px] font-mono text-cyan-700 bg-cyan-100/90 border border-cyan-300/80 px-1 py-0.2 rounded-2xs font-bold flex items-center gap-0.5 shadow-2xs">
                 <TrendingUp size={8} strokeWidth={3} />
@@ -911,7 +983,7 @@ export const Topbar: React.FC<TopbarProps> = ({
                 {(resources.water ?? 58000).toLocaleString()}
                 <span className="text-[9px] text-cyan-800/80 font-bold ml-0.5">kL</span>
               </strong>
-              <span className="text-[9.5px] font-mono text-cyan-800/70 bg-white/90 px-1 py-0.2 border border-cyan-200/80 rounded-2xs shadow-2xs">
+              <span className="text-[9.5px] font-mono text-cyan-800/80 bg-white/90 px-1 py-0.2 border border-cyan-200/80 rounded-2xs shadow-2xs">
                 {Math.round(waterCapacity / 1000)}k cap
               </span>
             </div>
@@ -926,9 +998,9 @@ export const Topbar: React.FC<TopbarProps> = ({
                 style={{ width: `${waterPercent}%` }}
               />
             </div>
-            <div className="flex items-center justify-between text-[8px] font-mono text-cyan-800/80 mt-0.5 font-medium">
+            <div className="flex items-center justify-between text-[8px] font-mono text-cyan-800/90 mt-0.5 font-medium">
               <span>Aquifer Grid</span>
-              <span className="font-bold text-cyan-900">{waterPercent}%</span>
+              <span className="font-bold text-cyan-900">{waterPercent}% Full</span>
             </div>
 
             {/* Hover Tooltip */}
@@ -937,7 +1009,7 @@ export const Topbar: React.FC<TopbarProps> = ({
                 <div className="font-bold flex justify-between border-b border-white/20 pb-1">
                   <span className="flex items-center gap-1 text-cyan-300">
                     <Droplet size={12} />
-                    AQUIFER & RESERVES
+                    AQUIFER & HYDRATION SYSTEM
                   </span>
                   <span className="font-mono text-cyan-300">{waterPercent}% FULL</span>
                 </div>
@@ -950,88 +1022,113 @@ export const Topbar: React.FC<TopbarProps> = ({
                   <span className="font-mono text-white">{waterCapacity.toLocaleString()} kL</span>
                 </div>
                 <div className="flex justify-between text-[11px] text-neutral-300">
+                  <span>Homeworld Demands:</span>
+                  <span className="font-mono text-cyan-300">10.0k kL/h (14M Citizens)</span>
+                </div>
+                <div className="flex justify-between text-[11px] text-neutral-300">
+                  <span>Recruit Hydration:</span>
+                  <span className="font-mono text-white">4.5 kL/conscript unit</span>
+                </div>
+                <div className="flex justify-between text-[11px] text-neutral-300">
                   <span>Desalination Net:</span>
                   <span className="font-mono text-cyan-400 font-bold">+75/t (+4.5k/h)</span>
                 </div>
-                <div className="flex justify-between text-[11px] text-neutral-300">
-                  <span>Grid Efficiency:</span>
-                  <span className="font-mono text-cyan-300">Nominal 100%</span>
-                </div>
                 <div className="text-[10px] text-cyan-200/70 pt-1 border-t border-white/10 font-mono">
-                  Atmospheric moisture and deep aquifer reserves. Drought multiplies environmental hazard penalties.
+                  Guarantees planetary hydration for 14M citizens and military conscripts. Click to manage.
                 </div>
               </div>
             )}
           </div>
 
-          {/* 6. POPULATION & PLUNGE STABILITY */}
+          {/* 6. CONSCRIPT RECRUITS & CITIZENS POPULATION */}
           <div
-            className="min-w-[135px] sm:min-w-[145px] xl:min-w-0 shrink-0 xl:shrink relative p-2 border border-indigo-300/80 bg-gradient-to-b from-indigo-50/70 via-white to-indigo-50/25 hover:border-indigo-600 hover:shadow-xs transition-all cursor-pointer group"
+            className="min-w-[160px] sm:min-w-[178px] xl:min-w-0 shrink-0 xl:shrink relative p-2 border-2 border-indigo-500/90 bg-gradient-to-b from-indigo-50/85 via-white to-indigo-100/35 hover:border-indigo-700 hover:shadow-md transition-all cursor-pointer group ring-1 ring-indigo-400/25"
             onMouseEnter={() => setActiveTooltip('pop')}
             onMouseLeave={() => setActiveTooltip(null)}
-            onClick={() => onNavigate && onNavigate('planet-list')}
+            onClick={() => {
+              sound.play('click');
+              setConscriptModalTab('conscripts');
+              setIsConscriptRecruitsModalOpen(true);
+            }}
           >
             <div className="flex items-center justify-between mb-1">
               <span className="text-[9px] font-black uppercase text-indigo-950 tracking-wider flex items-center gap-1.5">
-                <div className="w-4 h-4 rounded-xs bg-indigo-600/10 border border-indigo-500/30 flex items-center justify-center text-indigo-700 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                <div className="w-4 h-4 rounded-xs bg-indigo-600/15 border border-indigo-500/40 flex items-center justify-center text-indigo-700 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
                   <Users size={10} strokeWidth={2.5} />
                 </div>
-                <span>Citizens</span>
+                <span>Conscript Recruits</span>
               </span>
-              <span className="text-[9px] font-mono text-emerald-700 bg-emerald-100/90 border border-emerald-300/80 px-1 py-0.2 rounded-2xs font-bold flex items-center gap-0.5 shadow-2xs">
-                <Activity size={8} strokeWidth={3} />
-                STABLE
+              <span className="text-[9px] font-mono text-indigo-900 bg-indigo-100/90 border border-indigo-300/80 px-1 py-0.2 rounded-2xs font-bold flex items-center gap-0.5 shadow-2xs">
+                <Crosshair size={8} strokeWidth={3} className="text-indigo-700" />
+                +{(resources.unitProduction ?? 12)}/t
               </span>
             </div>
             <div className="flex items-baseline justify-between font-mono">
-              <strong className="text-sm sm:text-base font-bold tracking-tight text-indigo-950 font-mono">
-                {((resources.totalPopulation ?? 14200000) / 1000000).toFixed(2)}M
-                <span className="text-[9px] text-indigo-800/80 font-bold ml-0.5">pop</span>
+              <strong className="text-sm sm:text-base font-bold tracking-tight text-indigo-950 font-mono flex items-baseline gap-1">
+                <span>{((resources.totalPopulation ?? 14000000) / 1000000).toFixed(2)}M</span>
+                <span className="text-[9px] text-indigo-700/80 font-bold">pop</span>
               </strong>
-              <span className="text-[9.5px] font-mono text-emerald-800 font-bold bg-emerald-50 px-1 py-0.2 border border-emerald-200/80 rounded-2xs shadow-2xs">
-                Plunge 8%
+              <span className="text-[9.5px] font-mono text-amber-900 font-bold bg-amber-50 px-1.5 py-0.2 border border-amber-300/80 rounded-2xs shadow-2xs flex items-center gap-0.5">
+                <span className="text-[8px] text-amber-700 font-mono">🎖️</span>
+                {(resources.untrainedUnits ?? 1600).toLocaleString()}
               </span>
             </div>
-            {/* Plunge Stability Bar */}
+            {/* Dual Strata & Conscription Bar */}
             <div className="w-full h-1.5 bg-neutral-200/80 rounded-2xs overflow-hidden mt-1.5 flex">
               <div
-                className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-300"
-                style={{ width: '92%' }}
+                className="h-full bg-gradient-to-r from-indigo-600 to-indigo-400 transition-all duration-300"
+                style={{ width: '85%' }}
+                title="Civilian Strata"
+              />
+              <div
+                className="h-full bg-amber-500 transition-all duration-300"
+                style={{ width: '15%' }}
+                title="Military Conscripts"
               />
             </div>
-            <div className="flex items-center justify-between text-[8px] font-mono text-indigo-800/80 mt-0.5 font-medium">
-              <span>7 Societal Strata</span>
-              <span className="font-bold text-emerald-700">92% Secure</span>
+            <div className="flex items-center justify-between text-[8px] font-mono text-indigo-900/90 mt-0.5 font-medium">
+              <span>Homeworld (14M)</span>
+              <span className="font-bold text-indigo-900 flex items-center gap-0.5">
+                <span>Fields {activePlanet.fieldsUsed || 84}/{activePlanet.fieldsMax || 188}</span>
+              </span>
             </div>
 
             {/* Hover Tooltip */}
             {activeTooltip === 'pop' && (
-              <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-[#111111] text-white text-xs z-50 shadow-2xl border border-indigo-500/40 space-y-1.5 pointer-events-none">
+              <div className="absolute right-0 top-full mt-2 w-72 p-3 bg-[#111111] text-white text-xs z-50 shadow-2xl border border-indigo-500/40 space-y-1.5 pointer-events-none">
                 <div className="font-bold flex justify-between border-b border-white/20 pb-1">
                   <span className="flex items-center gap-1 text-indigo-300">
                     <Users size={12} />
-                    CITIZEN DEMOGRAPHICS
+                    CONSCRIPT RECRUITS & DEMOGRAPHICS
                   </span>
-                  <span className="font-mono text-emerald-400">92% STABLE</span>
+                  <span className="font-mono text-emerald-400">14M HOMEWORLD</span>
                 </div>
                 <div className="flex justify-between text-[11px] text-neutral-300">
-                  <span>Dominion Pops:</span>
-                  <span className="font-mono text-white">{(resources.totalPopulation ?? 14200000).toLocaleString()}</span>
+                  <span>Homeworld Population:</span>
+                  <span className="font-mono text-white font-bold">14,000,000 Citizens</span>
                 </div>
                 <div className="flex justify-between text-[11px] text-neutral-300">
-                  <span>Colonial Plunge:</span>
-                  <span className="font-mono text-emerald-400 font-bold">8% (Nominal)</span>
+                  <span>Untrained Conscripts:</span>
+                  <span className="font-mono text-amber-400 font-bold">{(resources.untrainedUnits ?? 1600).toLocaleString()} Recruits</span>
                 </div>
                 <div className="flex justify-between text-[11px] text-neutral-300">
-                  <span>Living Standards:</span>
-                  <span className="font-mono text-indigo-300">Utopian Abundance</span>
+                  <span>Conscription Draft Rate:</span>
+                  <span className="font-mono text-indigo-300 font-bold">+{(resources.unitProduction ?? 12)} / turn</span>
                 </div>
                 <div className="flex justify-between text-[11px] text-neutral-300">
-                  <span>Demographic Strata:</span>
-                  <span className="font-mono text-white">Farmers · Hydrologists · Miners</span>
+                  <span>Food & Water Sustenance:</span>
+                  <span className="font-mono text-emerald-400">Fully Supplied (8% Plunge)</span>
                 </div>
-                <div className="text-[10px] text-indigo-200/70 pt-1 border-t border-white/10 font-mono">
-                  Workforce distributes across all 7 planetary strata. Keep food and water secure to prevent societal plunge!
+                <div className="flex justify-between text-[11px] text-neutral-300">
+                  <span>Planetary Fields:</span>
+                  <span className="font-mono text-white">{activePlanet.fieldsUsed || 84} / {activePlanet.fieldsMax || 188} Used</span>
+                </div>
+                <div className="flex justify-between text-[11px] text-neutral-300">
+                  <span>Attached Moon:</span>
+                  <span className="font-mono text-cyan-300">{activePlanet.moonName || 'Luna Prime'} (Tier {activePlanet.lunarBase?.level || 2})</span>
+                </div>
+                <div className="text-[10px] text-indigo-200/80 pt-1 border-t border-white/10 font-mono">
+                  7 Population Strata (Farmers, Hydrologists, Miners, Industry, Scientists, Admins, Conscripts). Click to open Conscription & Colonization Console.
                 </div>
               </div>
             )}
@@ -1546,6 +1643,29 @@ export const Topbar: React.FC<TopbarProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Galactic Credits Monetary System & FX Console Modal */}
+      <GalacticCreditsModal
+        isOpen={isCreditsSystemModalOpen}
+        onClose={() => setIsCreditsSystemModalOpen(false)}
+        resources={resources}
+        onUpdateResources={onUpdateResources}
+        onNavigate={onNavigate}
+      />
+
+      {/* Conscript Recruits & Colonial Demographics Command Modal */}
+      <ConscriptRecruitsModal
+        isOpen={isConscriptRecruitsModalOpen}
+        onClose={() => setIsConscriptRecruitsModalOpen(false)}
+        resources={resources}
+        planets={planets}
+        activePlanetId={activePlanet.id}
+        onUpdateResources={onUpdateResources}
+        onUpdatePlanets={onUpdatePlanets}
+        onColonizePlanet={onColonizePlanet}
+        onNavigate={onNavigate}
+        initialTab={conscriptModalTab}
+      />
     </header>
   );
 };

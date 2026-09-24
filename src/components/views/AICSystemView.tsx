@@ -55,20 +55,28 @@ import {
   INITIAL_POWER_GRID,
 } from '../../data/aicData';
 
+export type AICTab = 'production' | 'logistics' | 'crafting' | 'power-grid' | 'grid-settings';
+
 interface AICSystemViewProps {
   resources: PlayerResources;
   onUpdateResources: (res: Partial<PlayerResources>) => void;
   onNavigate?: (route: string) => void;
+  initialTab?: AICTab;
 }
-
-type AICTab = 'production' | 'logistics' | 'crafting' | 'power-grid' | 'grid-settings';
 
 export const AICSystemView: React.FC<AICSystemViewProps> = ({
   resources,
   onUpdateResources,
   onNavigate,
+  initialTab = 'production',
 }) => {
-  const [activeTab, setActiveTab] = useState<AICTab>('production');
+  const [activeTab, setActiveTab] = useState<AICTab>(initialTab);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // AIC Production Lines State
   const [productionLines, setProductionLines] = useState<AICProductionLine[]>(() => {

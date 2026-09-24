@@ -13,6 +13,7 @@ import {
   Users,
   Eye,
   Award,
+  GraduationCap,
   Gem,
   Terminal,
   Volume2,
@@ -143,6 +144,20 @@ export const OGAME_NAV_SECTIONS: OGameNavSection[] = [
       { id: 'hyperspace-systems', label: 'Hyperspace & Motherships' },
       { id: 'ship', label: 'Mothership Nexus Overview' },
       { id: 'modules', label: 'Mothership Modular Subsystems' },
+    ],
+  },
+  {
+    id: 'workforce',
+    label: 'Workforce & Academy',
+    ogameName: 'WORKFORCE',
+    icon: GraduationCap,
+    defaultRoute: 'workforce-academy',
+    items: [
+      { id: 'workforce-academy', label: 'Workforce & Academy Hub' },
+      { id: 'academy-enlistment', label: 'Enlistment Terminal' },
+      { id: 'workforce-roster', label: '90-Role Imperial Roster' },
+      { id: 'academy-wings', label: '6 Specialized Wings' },
+      { id: 'academy-drills', label: 'Readiness Drills & Auto-Draft' },
     ],
   },
   {

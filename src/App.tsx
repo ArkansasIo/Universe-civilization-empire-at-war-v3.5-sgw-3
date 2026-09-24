@@ -168,6 +168,13 @@ import { NemesisSystemView } from './components/views/NemesisSystemView';
 import { AddWorldsUniverseBossView } from './components/views/AddWorldsUniverseBossView';
 import { LiveSystemRouteBar } from './components/LiveSystemRouteBar';
 import { PageHeaderCommandDeck } from './components/PageHeaderCommandDeck';
+import { WorkforceAcademyView } from './components/views/WorkforceAcademyView';
+import {
+  WorkforceAcademyState,
+  DEFAULT_WORKFORCE_ACADEMY_STATE,
+  calculateWorkforceTotals,
+  createDefaultUnitExperience,
+} from './data/workforceAcademyData';
 import { PatchNotesModal } from './components/modals/PatchNotesModal';
 import { SaveStateManagerModal } from './components/modals/SaveStateManagerModal';
 import { AdminLoginModal } from './components/modals/AdminLoginModal';
@@ -292,9 +299,13 @@ export default function App() {
   const [profile, setProfile] = useState<PlayerProfile>(() =>
     loadStored('profile', INITIAL_PROFILE)
   );
-  const [resources, setResources] = useState<PlayerResources>(() =>
-    loadStored('resources', INITIAL_RESOURCES)
-  );
+  const [resources, setResources] = useState<PlayerResources>(() => {
+    const loaded = loadStored('resources', INITIAL_RESOURCES);
+    if (!loaded.totalPopulation || loaded.totalPopulation < 14000000) {
+      loaded.totalPopulation = 14000000;
+    }
+    return loaded;
+  });
   const [technologies, setTechnologies] = useState<Technology[]>(() =>
     loadStored('technologies', INITIAL_TECHNOLOGIES)
   );
@@ -307,9 +318,28 @@ export default function App() {
   const [modules, setModules] = useState<MothershipModule[]>(() =>
     loadStored('modules', INITIAL_MOTHERSHIP_MODULES)
   );
-  const [planets, setPlanets] = useState<PlanetColony[]>(() =>
-    loadStored('planets', INITIAL_PLANETS)
-  );
+  const [planets, setPlanets] = useState<PlanetColony[]>(() => {
+    const loaded = loadStored('planets', INITIAL_PLANETS);
+    return loaded.map((p: PlanetColony) => {
+      if (p.isHomeworld && (!p.population || p.population.total < 14000000)) {
+        return {
+          ...p,
+          fieldsUsed: p.fieldsUsed || 84,
+          fieldsMax: p.fieldsMax || 188,
+          population: {
+            ...(p.population || INITIAL_PLANETS[0].population!),
+            total: 14000000,
+            housingCapacity: Math.max(22000000, p.population?.housingCapacity || 22000000),
+            strata: {
+              ...(p.population?.strata || INITIAL_PLANETS[0].population!.strata),
+              militaryRecruits: Math.max(1600000, p.population?.strata?.militaryRecruits || 1600000),
+            },
+          },
+        };
+      }
+      return p;
+    });
+  });
   const [activePlanetId, setActivePlanetId] = useState<string>(() =>
     loadStored('active_planet_id', 'pl-homeworld')
   );
@@ -332,6 +362,14 @@ export default function App() {
   const [rankings, setRankings] = useState<RankingEntry[]>(() =>
     loadStored('rankings', INITIAL_RANKINGS)
   );
+
+  const [masterUpgrades, setMasterUpgrades] = useState<MasterUpgradesState>(() =>
+    loadStored('master_upgrades', DEFAULT_MASTER_UPGRADES_STATE)
+  );
+
+  useEffect(() => {
+    localStorage.setItem('uc_state_master_upgrades', JSON.stringify(masterUpgrades));
+  }, [masterUpgrades]);
 
   // Active UI Navigation state
   const [activeRoute, setActiveRoute] = useState<string>('dashboard');
@@ -468,6 +506,11 @@ export default function App() {
     loadStored('admin_ogame_events', INITIAL_ADMIN_GLOBAL_EVENTS)
   );
 
+  // Workforce & Specialized Academy State
+  const [workforceAcademyState, setWorkforceAcademyState] = useState<WorkforceAcademyState>(() =>
+    loadStored('workforce_academy_state', DEFAULT_WORKFORCE_ACADEMY_STATE)
+  );
+
   // Auto-save changes to localStorage and Firestore
   useEffect(() => {
     localStorage.setItem('uc_state_profile', JSON.stringify(profile));
@@ -510,6 +553,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('uc_state_cron_logs', JSON.stringify(cronLogs));
   }, [cronLogs]);
+
+  useEffect(() => {
+    localStorage.setItem('uc_state_workforce_academy', JSON.stringify(workforceAcademyState));
+  }, [workforceAcademyState]);
 
   useEffect(() => {
     localStorage.setItem('uc_state_cron_config', JSON.stringify(cronConfig));
@@ -661,13 +708,21 @@ export default function App() {
   const netColonyIncome = Math.max(0, planetIncomeTotal - planetMaintenanceTotal);
   const planetDefTotal = planets.reduce((sum, p) => sum + (p.defenseBonus || 0), 0);
 
+  // Workforce Academy 90-Role totals with Persistent Veterancy & Doctrine
+  const workforceTotals = calculateWorkforceTotals(
+    workforceAcademyState.unitCounts,
+    workforceAcademyState.unitExperience
+  );
+
   // Natural income formula:
-  // Base Gross = ((untrained * 20) + ((miners + lifers) * 80) + planetIncomeTotal)
+  // Base Gross = ((untrained * 20) + ((miners + lifers) * 80) + planetIncomeTotal + workforceTotals.totalMiningYield * 40 + workforceTotals.totalCreditsTax)
   // Deduct colony maintenance cost per level (creates strategic trade-off for rapid expansion)
   const naturalIncomeGross =
     resources.untrainedUnits * 20 +
     (resources.miners + resources.lifers) * 80 +
-    planetIncomeTotal;
+    planetIncomeTotal +
+    workforceTotals.totalMiningYield * 40 +
+    workforceTotals.totalCreditsTax;
   const naturalIncomeBase = Math.max(0, naturalIncomeGross - planetMaintenanceTotal);
   const naturalIncome = Math.max(0, Math.round(naturalIncomeBase * raceIncomeMod * defconMult));
 
@@ -683,6 +738,7 @@ export default function App() {
     resources.superUnits * 2.5 +
     resources.spies * 0.4 +
     resources.antiSpies * 0.4 +
+    workforceTotals.totalCreditsUpkeep +
     equipmentUpkeep
   );
 
@@ -727,6 +783,7 @@ export default function App() {
   const strikePower = Math.round(
     (resources.attackUnits * 5 +
       resources.superUnits * 25 +
+      workforceTotals.totalAttack +
       totalWeaponPower * 0.6 +
       volleyBayLevel * 1200) *
       offenseMult *
@@ -737,6 +794,7 @@ export default function App() {
   const defensePower = Math.round(
     (resources.defenseUnits * 5 +
       resources.superUnits * 20 +
+      workforceTotals.totalDefense +
       totalDefenseEquipmentPower * 0.6 +
       planetDefTotal +
       shieldModLevel * 1500) *
@@ -786,6 +844,7 @@ export default function App() {
           setResources((prev) => ({
             ...prev,
             attackTurns: Math.min(prev.turnCap || 5000, prev.attackTurns + missedTicks),
+            credits: (prev.credits ?? 500000) + 250 * missedTicks,
             naquadah: prev.naquadah + addedIncome,
             untrainedUnits: prev.untrainedUnits + addedUnits,
           }));
@@ -1223,6 +1282,7 @@ export default function App() {
         setResources((prev) => ({
           ...prev,
           attackTurns: Math.min(prev.turnCap || 5000, prev.attackTurns + mult),
+          credits: (prev.credits ?? 500000) + 250 * mult,
           naquadah: prev.naquadah + incomeAdded,
           untrainedUnits: prev.untrainedUnits + recruitsAdded + (popGrowthTotal > 0 ? Math.round(popGrowthTotal * 0.1) : 0),
           metal: (prev.metal ?? 50000) + metalAdded,
@@ -1237,6 +1297,44 @@ export default function App() {
         }));
 
         return updated;
+      });
+
+      // Advance Workforce Unit Combat XP & Veterancy over time
+      setWorkforceAcademyState((prevState) => {
+        const currentExp = { ...(prevState.unitExperience || createDefaultUnitExperience()) };
+        let anyChanged = false;
+
+        // Active deployed units gain persistent combat XP each turn
+        Object.entries(prevState.unitCounts).forEach(([unitId, count]) => {
+          if (count > 0) {
+            const exp = currentExp[unitId] || {
+              unitId,
+              xp: 0,
+              currentRank: 0,
+              highestRankReached: 0,
+              totalCombatBattles: 0,
+              totalMissionsCompleted: 0,
+              activeDoctrineId: 'balanced_standard',
+            };
+
+            // Drill modifier: drill readiness score accelerates XP gain
+            const drillBonus = 1 + Math.min(1.0, (prevState.academyDrillScore || 0) / 4000);
+            const xpGained = Math.round((2 + Math.min(5, Math.floor(count / 250))) * mult * drillBonus);
+
+            currentExp[unitId] = {
+              ...exp,
+              xp: exp.xp + xpGained,
+              totalMissionsCompleted: exp.totalMissionsCompleted + mult,
+            };
+            anyChanged = true;
+          }
+        });
+
+        if (!anyChanged) return prevState;
+        return {
+          ...prevState,
+          unitExperience: currentExp,
+        };
       });
 
       setProfile((prev) => ({
@@ -1259,15 +1357,17 @@ export default function App() {
       const interest = Math.round(resources.bankedNaquadah * 0.02);
       setResources((prev) => ({
         ...prev,
+        credits: (prev.credits ?? 500000) + 15000,
         bankedNaquadah: prev.bankedNaquadah + interest,
       }));
       setProfile((prev) => ({
         ...prev,
         glory: prev.glory + 50,
       }));
-      logMessage = `Midnight settlement: Bank vault +${interest.toLocaleString()} NQ (2% interest), +50 Glory.`;
+      logMessage = `Midnight settlement: Bank vault +${interest.toLocaleString()} NQ (2% interest), +15,000 Galactic Credits, +50 Glory.`;
       logDetails = {
         interestAccrued: interest,
+        creditsAdded: 15000,
       };
     } else if (jobId === 'market_cron') {
       setOrders((prev) =>
@@ -1828,6 +1928,52 @@ export default function App() {
     };
   };
 
+  // Imperial Master & Storage Upgrades Handler
+  const handleMasterUpgradeKey = (
+    key: string,
+    cost: { metal: number; crystal: number; deuterium: number; naquadah: number }
+  ) => {
+    if (
+      (resources.metal || 0) < cost.metal ||
+      (resources.crystal || 0) < cost.crystal ||
+      (resources.deuterium || 0) < cost.deuterium ||
+      (resources.naquadah || 0) < cost.naquadah
+    ) {
+      return { success: false, message: 'Insufficient resources to complete imperial upgrade.' };
+    }
+
+    setResources((prev) => ({
+      ...prev,
+      metal: Math.max(0, (prev.metal || 0) - cost.metal),
+      crystal: Math.max(0, (prev.crystal || 0) - cost.crystal),
+      deuterium: Math.max(0, (prev.deuterium || 0) - cost.deuterium),
+      naquadah: Math.max(0, (prev.naquadah || 0) - cost.naquadah),
+    }));
+
+    setMasterUpgrades((prev) => {
+      const updated = { ...prev };
+      if (key.startsWith('storage.')) {
+        const field = key.replace('storage.', '') as keyof ResourceStorageUpgrades;
+        updated.storage = {
+          ...updated.storage,
+          [field]: ((updated.storage as any)[field] || 0) + 1,
+        };
+      } else if (key.startsWith('bank.')) {
+        const field = key.replace('bank.', '') as keyof BankVaultUpgradeState;
+        updated.bank = {
+          ...updated.bank,
+          [field]: ((updated.bank as any)[field] || 0) + 1,
+        };
+      } else {
+        (updated as any)[key] = ((updated as any)[key] || 0) + 1;
+      }
+      return updated;
+    });
+
+    sound.play('confirm');
+    return { success: true, message: `Imperial upgrade [${key}] advanced to next level!` };
+  };
+
   // Upgrade Planet
   const handleUpgradePlanet = (planetId: string) => {
     const pl = planets.find((p) => p.id === planetId);
@@ -1878,6 +2024,8 @@ export default function App() {
       ...prev,
       deuterium: (prev.deuterium ?? 0) - 10000,
       crystal: (prev.crystal ?? 0) - 15000,
+      totalPopulation: (prev.totalPopulation || 14000000) + 1200000,
+      untrainedUnits: (prev.untrainedUnits || 0) + 100,
     }));
 
     const newMaint = calculateColonyMaintenance(
@@ -1895,6 +2043,43 @@ export default function App() {
       defenseBonus: 15000,
       maintenanceCost: newMaint,
       jumpGateLevel: 0,
+      fieldsUsed: 14,
+      fieldsMax: 165,
+      hasMoon: true,
+      moonName: `${name} Lunar Outpost`,
+      foodStockpile: 20000,
+      foodCapacity: 60000,
+      foodProductionRate: 5000,
+      foodConsumptionRate: 3000,
+      waterStockpile: 25000,
+      waterCapacity: 75000,
+      waterProductionRate: 6500,
+      waterConsumptionRate: 3800,
+      population: {
+        total: 1200000,
+        growthRatePerHour: 8000,
+        housingCapacity: 4000000,
+        happiness: 85,
+        unrest: 8,
+        strata: {
+          farmers: 200000,
+          hydrologists: 200000,
+          miners: 300000,
+          industrialWorkers: 250000,
+          scientists: 100000,
+          administrators: 50000,
+          militaryRecruits: 100000,
+        },
+        livingStandard: 'utopian',
+        rationingLevel: 'abundant',
+      },
+      lunarBase: {
+        level: 1,
+        sensorPhalanxLevel: 1,
+        jumpGateLevel: 0,
+        moonFieldsUsed: 4,
+        moonFieldsMax: 16,
+      },
     };
 
     setPlanets((prev) => [...prev, newColony]);
@@ -1902,7 +2087,66 @@ export default function App() {
 
     return {
       success: true,
-      message: `Planetary colony established at ${coordinate} (${biome})! Tier 1 Maintenance: ${newMaint.toLocaleString()} NQ/turn.`,
+      message: `Planetary colony established at ${coordinate} (${biome})! Tier 1 Maintenance: ${newMaint.toLocaleString()} NQ/turn. Seeded with 1.2M Citizens, 165 Fields, and Attached Moon.`,
+    };
+  };
+
+  // Direct Conscript Recruits Mobilization Handler
+  const handleConscriptRecruits = (count: number, planetId?: string) => {
+    const foodCost = Math.round(count * 4.5);
+    const waterCost = Math.round(count * 4.5);
+    const nqCost = Math.round(count * 25);
+
+    if ((resources.food ?? 0) < foodCost) {
+      return {
+        success: false,
+        message: `Insufficient Food reserves! Mobilizing ${count} recruits requires ${foodCost} kg Food rations.`,
+      };
+    }
+    if ((resources.water ?? 0) < waterCost) {
+      return {
+        success: false,
+        message: `Insufficient Water reserves! Mobilizing ${count} recruits requires ${waterCost} kL Water rations.`,
+      };
+    }
+    if (resources.naquadah < nqCost) {
+      return {
+        success: false,
+        message: `Insufficient Naquadah! Requires ${nqCost.toLocaleString()} NQ for military gear & transport.`,
+      };
+    }
+
+    setResources((prev) => ({
+      ...prev,
+      untrainedUnits: (prev.untrainedUnits || 0) + count,
+      naquadah: prev.naquadah - nqCost,
+      food: Math.max(0, (prev.food || 0) - foodCost),
+      water: Math.max(0, (prev.water || 0) - waterCost),
+    }));
+
+    const targetId = planetId || activePlanetId || 'pl-homeworld';
+    setPlanets((prev) =>
+      prev.map((p) => {
+        if (p.id !== targetId) return p;
+        return {
+          ...p,
+          foodStockpile: Math.max(0, (p.foodStockpile || 35000) - foodCost),
+          waterStockpile: Math.max(0, (p.waterStockpile || 48000) - waterCost),
+          population: {
+            ...p.population!,
+            strata: {
+              ...p.population!.strata,
+              militaryRecruits: (p.population?.strata?.militaryRecruits || 1600000) + count,
+            },
+          },
+        };
+      })
+    );
+
+    sound.play('confirm');
+    return {
+      success: true,
+      message: `Mobilized ${count.toLocaleString()} Conscript Recruits into untrained reserves.`,
     };
   };
 
@@ -2794,6 +3038,9 @@ export default function App() {
           }}
           onOpenCredits={() => setIsCreditsModalOpen(true)}
           onToggleMobileMenu={() => setMobileMenuOpen((prev) => !prev)}
+          onUpdateResources={(res) => setResources((prev) => ({ ...prev, ...res }))}
+          onUpdatePlanets={setPlanets}
+          onColonizePlanet={handleColonizePlanet}
         />
 
         {/* Live System 8-Step Route Navigation Bar (Feature 40) */}
@@ -2883,9 +3130,16 @@ export default function App() {
               />
             )}
 
+            {activeRoute === 'account-profiles' && (
+              <AccountProfilesView
+                profile={profile}
+                onUpdateProfile={(updates) => setProfile((prev) => ({ ...prev, ...updates }))}
+                onLogout={handleLogout}
+              />
+            )}
+
             {(activeRoute === 'player-profile' ||
               activeRoute === 'account-info' ||
-              activeRoute === 'account-profiles' ||
               activeRoute === 'account-settings' ||
               activeRoute === 'account') && (
               <ProfileSystemView
@@ -2897,13 +3151,7 @@ export default function App() {
                 onAscend={handleAscend}
                 onLogout={handleLogout}
                 onNavigate={setActiveRoute}
-                initialTab={
-                  activeRoute === 'account-settings'
-                    ? 'settings'
-                    : activeRoute === 'account-profiles'
-                    ? 'slots'
-                    : 'dossier'
-                }
+                initialTab={activeRoute === 'account-settings' ? 'settings' : 'dossier'}
               />
             )}
 
@@ -3014,6 +3262,29 @@ export default function App() {
                 onTrainUnits={handleTrainUnits}
                 onUpgradeProduction={handleUpgradeProduction}
                 onNavigate={setActiveRoute}
+              />
+            )}
+
+            {(activeRoute === 'workforce-academy' ||
+              activeRoute === 'academy-enlistment' ||
+              activeRoute === 'academy-wings' ||
+              activeRoute === 'workforce-roster' ||
+              activeRoute === 'academy-drills') && (
+              <WorkforceAcademyView
+                resources={resources}
+                onUpdateResources={(res) => setResources((prev) => ({ ...prev, ...res }))}
+                academyState={workforceAcademyState}
+                onUpdateAcademyState={setWorkforceAcademyState}
+                onNavigate={setActiveRoute}
+                initialTab={
+                  activeRoute === 'workforce-roster'
+                    ? 'roster'
+                    : activeRoute === 'academy-wings'
+                    ? 'wings'
+                    : activeRoute === 'academy-drills'
+                    ? 'drills'
+                    : 'enlistment'
+                }
               />
             )}
 
@@ -3141,8 +3412,30 @@ export default function App() {
               />
             )}
 
-            {(activeRoute === 'spy-log' || activeRoute === 'enemy-intelligence') && (
-              <IntelligenceView missions={missions} onNavigate={setActiveRoute} />
+            {(activeRoute === 'master-upgrades' || activeRoute === 'storage-upgrades') && (
+              <MasterUpgradesView
+                resources={resources}
+                upgradesState={masterUpgrades}
+                onUpgradeKey={handleMasterUpgradeKey}
+                onNavigate={setActiveRoute}
+                initialCategory={activeRoute === 'storage-upgrades' ? 'storage' : 'all'}
+              />
+            )}
+
+            {(activeRoute === 'spy-log' ||
+              activeRoute === 'enemy-intelligence' ||
+              activeRoute === 'intel-codex') && (
+              <IntelligenceView
+                missions={missions}
+                onNavigate={setActiveRoute}
+                defaultTab={
+                  activeRoute === 'enemy-intelligence'
+                    ? 'enemy-intelligence'
+                    : activeRoute === 'intel-codex'
+                    ? 'intel-codex'
+                    : 'spy-log'
+                }
+              />
             )}
 
             {(activeRoute === 'resource-exchange' ||
@@ -3214,6 +3507,7 @@ export default function App() {
                 resources={resources}
                 onUpdateResources={(res) => setResources((prev) => ({ ...prev, ...res }))}
                 onNavigate={setActiveRoute}
+                initialTab={activeRoute === 'power-grid' ? 'power-grid' : 'production'}
               />
             )}
 
@@ -3474,6 +3768,22 @@ export default function App() {
                       ? 'maintenance'
                       : 'crown'
                   }
+                />
+              ) : activeRoute === 'cron-jobs' || activeRoute === 'cron-logs' || activeRoute === 'cron-cli' ? (
+                <CronSystemView
+                  jobs={cronJobs}
+                  logs={cronLogs}
+                  config={cronConfig}
+                  nextTickSeconds={nextTickSeconds}
+                  resources={resources}
+                  grossIncome={naturalIncome}
+                  netIncome={netIncome}
+                  upkeepTotal={militaryUpkeep}
+                  onUpdateConfig={handleUpdateCronConfig}
+                  onRunJob={handleRunCronJob}
+                  onRunAllJobs={handleRunAllCronJobs}
+                  onToggleJob={handleToggleCronJob}
+                  onClearLogs={handleClearCronLogs}
                 />
               ) : (
                 <div className="border-2 border-red-600 bg-white p-8 max-w-3xl mx-auto my-8 font-mono shadow-xl space-y-6">
